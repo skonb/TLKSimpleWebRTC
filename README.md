@@ -13,7 +13,7 @@ Usage is mostly the same with the original version, you can check [original proj
 
 Creating the build environment is a bit different than the original version. 
 
-First download / clone and add files under the `Classes` folder to your project. Repeat this for the [TLKWebRTC](https://github.com/otalk/TLKWebRTC.git) project. 
+First download / clone and add files under the `Classes` folder to your project. Repeat this for the [TLKWebRTC](https://github.com/otalk/TLKWebRTC.git). 
 
 Afterwards add following lines to your Podfile;
 
@@ -26,11 +26,11 @@ Afterwards add following lines to your Podfile;
 
 * There is a new initializer for managing connection configuration. It can be used like this;
 
-    NSDictionary * config = @{@"selfSigned": @YES, @"sessionDelegate" : self};
-    [self.signaling connectToServer:@"https://192.168.0.102" port: 3000 config: config success:^{
-    } failure:^(NSString* error) {
-        NSLog(@"connect failure");
-    }];
+        NSDictionary * config = @{@"selfSigned": @YES, @"sessionDelegate" : self};
+        [self.signaling connectToServer:@"https://192.168.0.102" port: 3000 config: config success:^{
+        } failure:^(NSString* error) {
+            NSLog(@"connect failure");
+        }];
 
 For the full list of possible options please refer to [Socket.IO client documentation](https://github.com/socketio/socket.io-client-swift#options).
 
