@@ -20,8 +20,9 @@ typedef void (^TLKSocketIOSignalingFailureBlock)(NSError *error);
 
 @property (weak, nonatomic) id <TLKSocketIOSignalingDelegate> delegate;
 
-- (void)connectToServer:(NSString*)apiServer success:(void(^)(void))successCallback failure:(void(^)(NSError*))failureCallback;
-- (void)connectToServer:(NSString*)apiServer port:(int)port secure:(BOOL)secure success:(void(^)(void))successCallback failure:(void(^)(NSError*))failureCallback;
+- (void)connectToServer:(NSString*)apiServer success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback;
+- (void)connectToServer:(NSString*)apiServer port:(int)port secure:(BOOL)secure success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback;
+- (void)connectToServer:(NSString*)apiServer port:(int)port config:( NSDictionary *) config success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback;
 - (void)joinRoom:(NSString*)room withKey:(NSString*)key success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback;
 - (void)joinRoom:(NSString*)room success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback;
 - (void)leaveRoom;

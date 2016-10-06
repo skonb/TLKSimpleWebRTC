@@ -8,11 +8,11 @@
 #import "TLKMediaStream.h"
 
 #import "TLKWebRTC.h"
-#import "AZSocketIO.h"
 #import "RTCMediaStream.h"
 #import "RTCICEServer.h"
 #import "RTCVideoTrack.h"
 #import "RTCAudioTrack.h"
+@import SocketIO;
 
 #define LOG_SIGNALING 1
 #ifndef DLog
@@ -45,7 +45,7 @@
     BOOL _localVideoMuted;
 }
 
-@property (nonatomic, strong) AZSocketIO *socket;
+@property (nonatomic, strong) SocketIOClient *socket;
 @property (nonatomic, strong) TLKWebRTC *webRTC;
 
 @property (nonatomic, readwrite) NSString *roomName;
@@ -175,29 +175,23 @@
 
 #pragma mark - connect
 
-- (void)connectToServer:(NSString*)apiServer success:(void(^)(void))successCallback failure:(void(^)(NSError*))failureCallback {
-    [self connectToServer:apiServer port:8888 secure:YES success:successCallback failure:failureCallback];
+- (void)connectToServer:(NSString*)apiServer success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback {
+    [self connectToServer:apiServer port: 8888 config:@{@"secure": @YES} success:successCallback failure:failureCallback];
 }
 
-- (void)connectToServer:(NSString*)apiServer port:(int)port secure:(BOOL)secure success:(void(^)(void))successCallback failure:(void(^)(NSError*))failureCallback {
+- (void)connectToServer:(NSString*)apiServer port:(int)port secure:(BOOL)secure success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback {
+    [self connectToServer:apiServer port:port config:@{@"secure": [NSNumber numberWithBool: secure]} success:successCallback failure:failureCallback];
+}
+
+- (void)connectToServer:(NSString*)apiServer port:(int)port config:( NSDictionary *) config success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback {
     if (self.socket) {
         [self _disconnectSocket];
     }
     
     __weak TLKSocketIOSignaling *weakSelf = self;
 
-    self.socket = [[AZSocketIO alloc] initWithHost:apiServer andPort:[NSString stringWithFormat:@"%d",port] secure:secure];
-
-    NSString* originURL = [NSString stringWithFormat:@"https://%@:%d", apiServer, port];
-    [self.socket setValue:originURL forHTTPHeaderField:@"Origin"];
-
-    // setup SocketIO blocks
-    self.socket.messageReceivedBlock = ^(id data) { [weakSelf _socketMessageReceived:data]; };
-    self.socket.eventReceivedBlock = ^(NSString *eventName, id data) { [weakSelf _socketEventReceived:eventName withData:data]; };
-    self.socket.disconnectedBlock = ^() { [weakSelf _socketDisconnected]; };
-    self.socket.errorBlock = ^(NSError *error) { [weakSelf _socketReceivedError:error]; };
-    
-    self.socket.reconnectionLimit = 5.0f;
+    NSURL* url = [[NSURL alloc] initWithString: [NSString stringWithFormat:@"%@:%d", apiServer, port]];
+    self.socket = [[SocketIOClient alloc] initWithSocketURL:url config: config];
 
     if (!self.webRTC) {
         if (self.allowVideo && self.videoDevice) {
@@ -208,7 +202,7 @@
         self.webRTC.delegate = self;
     }
     
-    [self.socket connectWithSuccess:^{
+    [self.socket on:@"connect" callback:^(NSArray* data, SocketAckEmitter* ack) {
         dispatch_async(dispatch_get_main_queue(), ^{
             TLKSocketIOSignaling *strongSelf = weakSelf;
             strongSelf.localMediaStream = strongSelf.webRTC.localMediaStream;
@@ -217,23 +211,43 @@
                 successCallback();
             }
         });
-    } andFailure:^(NSError *error) {
-        DLog(@"Failed to connect socket.io: %@", error);
+    }];
+    
+    [self.socket on:@"message" callback:^(NSArray* data, SocketAckEmitter* ack) {
+        [weakSelf _socketMessageReceived:data];
+    }];
+    
+    [self.socket on:@"error" callback:^(NSArray* data, SocketAckEmitter* ack) {
+        DLog(@"Failed to connect socket.io: %@", data[0]);
         if (failureCallback) {
-            failureCallback(error);
+            failureCallback(data[0]);
         }
     }];
+    
+    [self.socket on:@"disconnect" callback:^(NSArray* data, SocketAckEmitter* ack) {
+         [weakSelf _socketDisconnected];
+    }];
+
+    [self.socket onAny:^(SocketAnyEvent* e) {
+        if (![e.event isEqualToString:@"connect"] &&
+            ![e.event isEqualToString:@"disconnect"] &&
+            ![e.event isEqualToString:@"error"])
+        {
+            [weakSelf _socketEventReceived: e.event withData: e.items];
+        }
+    }];
+    
+    [self.socket connect];
 }
 
 - (void)joinRoom:(NSString*)room withKey:(NSString*)key success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
-    NSError *error = nil;
-    id args;
+    NSMutableArray * args = [NSMutableArray new];
+    [args addObject: room];
     if (key) {
-        args = @{@"name": room, @"key": key};
-    } else {
-        args = room;
-    }
-    [self.socket emit:@"join" args:args error:&error ackWithArgs:^(NSArray *data) {
+        [args addObject: key];
+    } 
+    
+    [self.socket emitWithAck: @"join" with:args](0, ^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             NSDictionary* clients = data[1][@"clients"];
             
@@ -254,11 +268,7 @@
             NSLog(@"Error: %@", data[0]);
             failureCallback();
         }
-    }];
-    if (error) {
-        NSLog(@"Error: %@", error);
-        failureCallback();
-    }
+    });
 }
 
 - (void)joinRoom:(NSString *)room success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
@@ -277,8 +287,7 @@
 }
 
 - (void)lockRoomWithKey:(NSString *)key success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
-    NSError *error = nil;
-    [self.socket emit:@"lockRoom" args:key error:&error ackWithArgs:^(NSArray *data) {
+    [self.socket emitWithAck: @"lockRoom" with:@[key]](0, ^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             if(successCallback) {
                 successCallback();
@@ -289,18 +298,11 @@
                 failureCallback();
             }
         }
-    }];
-    if(error) {
-        NSLog(@"Error: %@", error);
-        if(failureCallback) {
-            failureCallback();
-        }
-    }
+    });
 }
 
 - (void)unlockRoomWithSuccess:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
-    NSError *error = nil;
-    [self.socket emit:@"unlockRoom" args:nil error:&error ackWithArgs:^(NSArray *data) {
+    [self.socket emitWithAck: @"unlockRoom" with: @[]](0, ^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             if(successCallback) {
                 successCallback();
@@ -311,26 +313,14 @@
                 failureCallback();
             }
         }
-    }];
-    if (error) {
-        NSLog(@"Error: %@", error);
-        if(failureCallback) {
-            failureCallback();
-        }
-    }
+    });
 }
 
 #pragma mark - Mute/Unmute utilities
 
 - (void)_sendMuteMessagesForTrack:(NSString *)trackString mute:(BOOL)mute {
-    NSError *error = nil;
-
     for (NSString* peerID in self.currentClients) {
-        [self.socket emit:@"message"
-                     args:@{@"to":peerID,
-                            @"type" : mute ? @"mute" : @"unmute",
-                            @"payload": @{@"name":trackString}}
-                    error:&error];
+        [self.socket emit:@"message" with:@[@{@"to":peerID, @"type" : mute ? @"mute" : @"unmute",  @"payload": @{@"name":trackString}}]];
     }
 }
 
@@ -374,11 +364,11 @@
             NSString *username = info[@"username"] ? info[@"username"] : @"";
             NSString *password = info[@"credential"] ? info[@"credential"] : @"";
             RTCICEServer *server = [[RTCICEServer alloc] initWithURI:[NSURL URLWithString:info[@"url"]] username:username password:password];
-            [self.webRTC addICEServer:server];
+            if (server != nil)
+                [self.webRTC addICEServer:server];
         }
-        
     } else {
-        
+    
         dictionary = data[0];
         
         if (![dictionary isKindOfClass:[NSDictionary class]]) {
@@ -467,8 +457,7 @@
                            @"roomType": @"video",
                            @"type": offer.type,
                            @"payload": @{@"type": offer.type, @"sdp": offer.description}};
-    NSError *error = nil;
-    [self.socket emit:@"message" args:@[args] error:&error];
+    [self.socket emit:@"message" with:@[args]];
 }
 
 - (void)webRTC:(TLKWebRTC *)webRTC didSendSDPAnswer:(RTCSessionDescription *)answer forPeerWithID:(NSString* )peerID {
@@ -476,8 +465,7 @@
                            @"roomType": @"video",
                            @"type": answer.type,
                            @"payload": @{@"type": answer.type, @"sdp": answer.description}};
-    NSError *error = nil;
-    [self.socket emit:@"message" args:@[args] error:&error];
+    [self.socket emit:@"message" with:@[args]];
 }
 
 - (void)webRTC:(TLKWebRTC *)webRTC didSendICECandidate:(RTCICECandidate *)candidate forPeerWithID:(NSString *)peerID {
@@ -487,8 +475,7 @@
                            @"payload": @{ @"candidate" : @{@"sdpMid": candidate.sdpMid,
                                                            @"sdpMLineIndex": [NSString stringWithFormat:@"%ld", (long)candidate.sdpMLineIndex],
                                                            @"candidate": candidate.sdp}}};
-    NSError *error = nil;
-    [self.socket emit:@"message" args:@[args] error:&error];
+    [self.socket emit:@"message" with:@[args]];
 }
 
 - (void)webRTC:(TLKWebRTC *)webRTC didObserveICEConnectionStateChange:(RTCICEConnectionState)state forPeerWithID:(NSString *)peerID {
@@ -498,8 +485,7 @@
     else if (state == RTCICEConnectionFailed) {
         NSDictionary *args = @{@"to": peerID,
                                @"type": @"iceFailed"};
-        NSError *error = nil;
-        [self.socket emit:@"message" args:@[args] error:&error];
+        [self.socket emit:@"message" with:@[args]];
         [[[UIAlertView alloc] initWithTitle:@"Connection Failed" message:@"Talky could not establish a connection to a participant in this chat. Please try again later." delegate:nil cancelButtonTitle:@"Continue" otherButtonTitles:nil] show];
     }
 }
