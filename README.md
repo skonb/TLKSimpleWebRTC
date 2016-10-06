@@ -1,67 +1,41 @@
-# TLKSimpleWebRTC
+# TLKSimpleWebRTC for the current Signalmaster
 
-A iOS interface to connect to WebRTC sessions using a [Signalmaster](https://github.com/andyet/signalmaster) 
-based signaling server using Socket.io.
+A version of TLKSimpleWebRTC which uses the official [Socket.IO client](https://github.com/socketio/socket.io-client-swift) for communicating with [Signalmaster](https://github.com/andyet/signalmaster). 
+
+## Why is this needed? 
+At the time this document written, Signalmaster uses Socket.IO 1.3.7, while [AZSocketIO](https://github.com/lukabernardi/AZSocketIO), which is basis of socket communication in TLKSimpleWebRTC, uses 0.9. Since handshaking protocol between Socket.IO 0.9 and 1.0+ is different, TLKSimpleWebRTC is not working with the current Signalmaster anymore. Meanwhile, Socket.IO released their own iOS/OSX version, so this fork aims to use this implementation and create a compatible version with the latest Signalmaster.
 
 Usage 
 -----
 
-See [otalk/iOS-demo](https://github.com/otalk/iOS-demo) for an example application using the interface.
+Usage is mostly the same with the original version, you can check [original project](https://github.com/otalk/TLKSimpleWebRTC) for further instructions. Differences are mentioned in the related section. 
 
 **Build Environment**
 
-We recommend pulling the open source code (TLKSimpleWebRTC, as well as TLKWebRTC - a small part of the project 
-that is independent of the signaling server) and the precompiled iOS libraries via CocoaPods. 
+Creating the build environment is a bit different than the original version. 
 
-Here's the Podfile that we use for that:
+First download / clone and add files under the `Classes` folder to your project. Repeat this for the [TLKWebRTC](https://github.com/otalk/TLKWebRTC.git) project. 
 
-    target "ios-demo" do
-    
-	pod 'libjingle_peerconnection'
-	pod 'TLKWebRTC', :git => 'https://github.com/otalk/TLKWebRTC.git'
-	pod 'TLKSimpleWebRTC', :git => 'https://github.com/otalk/TLKSimpleWebRTC.git'
+Afterwards add following lines to your Podfile;
 
-	end
+    use_frameworks!
 
-**Connecting to the signaling server**
+    pod 'libjingle_peerconnection'
+    pod 'Socket.IO-Client-Swift'
 
-You can connect to the signaling server by allocating a TLKSocketIOSignaling object. You'll also need to set 
-a delegate to receive messages from the signaling server.
+**Differences from the TLKSimpleWebRTC**
 
-    self.signaling = [[TLKSocketIOSignaling alloc] initWithVideo:YES];
-    self.signaling.delegate = self;
-    
-To join a chat, you need to both connect to a server and join a room.
+There is a new initializer for managing connection configuration. You can call it like this;
 
-    [self.signaling connectToServer:@"signaling.simplewebrtc.com" port:80 secure:NO success:^{
-        [self.signaling joinRoom:@"ios-demo" success:^{
-            NSLog(@"join success");
-        } failure:^{
-            NSLog(@"join failure");
-        }];
-        NSLog(@"connect success");
-    } failure:^(NSError* error) {
+    NSDictionary * config = @{@"selfSigned": @YES, @"sessionDelegate" : self};
+    [self.signaling connectToServer:@"https://192.168.0.102" port: 3000 config: config success:^{
+    } failure:^(NSString* error) {
         NSLog(@"connect failure");
     }];
-	
 
-**Showing the video**
+For detailed list of possible options please refer to [Socket.IO client documentation](https://github.com/socketio/socket.io-client-swift#options).
 
-TLKSimpleWebRTC doesn't provide any interfaces for showing the video, but you can do it with the WebRTC Objective-C 
-interface (headers included with the precompiled WebRTC libs). Create a RTCEAGLVideoView to render in response to delegate calls from TLKSocketIOSignaling.
+----
 
-	@interface ViewController () <TLKSocketIOSignalingDelegate, RTCEAGLVideoViewDelegate>
-	@property (strong, nonatomic) RTCEAGLVideoView* remoteView;
-	@end
-	
-	//...
-	
-	- (void)addedStream:(TLKMediaStream *)stream {
-	    if (!self.remoteView) {
-	        self.remoteView = [[RTCEAGLVideoView alloc] initWithFrame:CGRectMake(0, 0, 640, 480)];
-	        self.remoteView.delegate = self;
-	        [self.view addSubview:self.renderView];
-        
-	        [(RTCVideoTrack*)stream.stream.videoTracks[0] addRenderer:self.remoteView];
-	    }
-	}
+Failures are reported with `NSString` instead of `NSError`. 
+
