@@ -245,9 +245,10 @@
     [args addObject: room];
     if (key) {
         [args addObject: key];
-    } 
+    }
     
-    [self.socket emitWithAck: @"join" with:args](0, ^(NSArray* data) {
+    
+    [[self.socket emitWithAck: @"join" with:args] timingOutAfter:0 callback:^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             NSDictionary* clients = data[1][@"clients"];
             
@@ -268,7 +269,7 @@
             NSLog(@"Error: %@", data[0]);
             failureCallback();
         }
-    });
+    }];
 }
 
 - (void)joinRoom:(NSString *)room success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
@@ -287,7 +288,7 @@
 }
 
 - (void)lockRoomWithKey:(NSString *)key success:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
-    [self.socket emitWithAck: @"lockRoom" with:@[key]](0, ^(NSArray* data) {
+    [[self.socket emitWithAck: @"lockRoom" with:@[key]] timingOutAfter:0 callback:^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             if(successCallback) {
                 successCallback();
@@ -298,11 +299,11 @@
                 failureCallback();
             }
         }
-    });
+    }];
 }
 
 - (void)unlockRoomWithSuccess:(void(^)(void))successCallback failure:(void(^)(void))failureCallback {
-    [self.socket emitWithAck: @"unlockRoom" with: @[]](0, ^(NSArray* data) {
+    [[self.socket emitWithAck: @"unlockRoom" with: @[]] timingOutAfter:0 callback:^(NSArray* data) {
         if (data[0] == [NSNull null]) {
             if(successCallback) {
                 successCallback();
@@ -313,7 +314,7 @@
                 failureCallback();
             }
         }
-    });
+    }];
 }
 
 #pragma mark - Mute/Unmute utilities
