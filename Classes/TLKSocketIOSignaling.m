@@ -442,7 +442,7 @@
         }
     }
     else if ([eventName isEqualToString:@"message"]) {
-        [_delegate socketIOSignaling: self recievedMessage: dictionary[@"type"] andData: data];
+        [_delegate socketIOSignaling: self recievedMessage: dictionary andData: data];
     }
 }
 
