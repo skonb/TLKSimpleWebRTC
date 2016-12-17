@@ -66,4 +66,6 @@ typedef void (^TLKSocketIOSignalingFailureBlock)(NSError *error);
 - (void)socketIOSignaling:(TLKSocketIOSignaling *)socketIOSignaling peer:(NSString *)peer toggledVideoMute:(BOOL)mute;
 - (void)socketIOSignaling:(TLKSocketIOSignaling *)socketIOSignaling didChangeLock:(BOOL)locked;
 
+- (void)socketIOSignaling:(TLKSocketIOSignaling *)socketIOSignaling recievedMessage:(NSString *)message andData: (id) data;
+
 @end

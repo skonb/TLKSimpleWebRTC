@@ -337,7 +337,7 @@
 
 - (void)_socketEventReceived:(NSString*)eventName withData:(id)data {
     NSDictionary *dictionary = nil;
-    
+
     if ([eventName isEqualToString:@"locked"]) {
         
         self.roomKey = (NSString*)[data objectAtIndex:0];
@@ -375,10 +375,11 @@
         if (![dictionary isKindOfClass:[NSDictionary class]]) {
             dictionary = nil;
         }
-        
     }
 
     NSLog(@"eventName = %@, type = %@, from = %@, to = %@",eventName, dictionary[@"type"], dictionary[@"from"], dictionary[@"to"]);
+    
+    NSDictionary * payload = dictionary[@"payload"];
     
     if ([dictionary[@"type"] isEqualToString:@"iceFailed"]) {
     
@@ -386,16 +387,16 @@
     
     } else if ([dictionary[@"type"] isEqualToString:@"candidate"]) {
         
-        RTCICECandidate* candidate = [[RTCICECandidate alloc] initWithMid:dictionary[@"payload"][@"candidate"][@"sdpMid"]
-                                                                    index:[dictionary[@"payload"][@"candidate"][@"sdpMLineIndex"] integerValue]
-                                                                      sdp:dictionary[@"payload"][@"candidate"][@"candidate"]];
+        RTCICECandidate* candidate = [[RTCICECandidate alloc] initWithMid:payload[@"candidate"][@"sdpMid"]
+                                                                    index:[payload[@"candidate"][@"sdpMLineIndex"] integerValue]
+                                                                      sdp:payload[@"candidate"][@"candidate"]];
         
         [self.webRTC addICECandidate:candidate forPeerWithID:dictionary[@"from"]];
         
     } else if ([dictionary[@"type"] isEqualToString:@"answer"]) {
         
-        RTCSessionDescription* remoteSDP = [[RTCSessionDescription alloc] initWithType:dictionary[@"payload"][@"type"]
-                                                                                   sdp:dictionary[@"payload"][@"sdp"]];
+        RTCSessionDescription* remoteSDP = [[RTCSessionDescription alloc] initWithType:payload[@"type"]
+                                                                                   sdp:payload[@"sdp"]];
         
         [self.webRTC setRemoteDescription:remoteSDP forPeerWithID:dictionary[@"from"] receiver:NO];
         
@@ -405,7 +406,7 @@
         [self.currentClients addObject:dictionary[@"from"]];
         
         // Fix for browser-to-app connection crash using beta API.
-        NSString* origSDP = dictionary[@"payload"][@"sdp"];
+        NSString* origSDP = payload[@"sdp"];
         NSError* error;
         NSRegularExpression *regex = [NSRegularExpression regularExpressionWithPattern:@"m=application \\d+ DTLS/SCTP 5000 *"
                                                                                options:0
@@ -413,7 +414,7 @@
         
         NSString* sdp = [regex stringByReplacingMatchesInString:origSDP options:0 range:NSMakeRange(0, [origSDP length]) withTemplate:@"m=application 0 DTLS/SCTP 5000"];
         
-        RTCSessionDescription* remoteSDP = [[RTCSessionDescription alloc] initWithType:dictionary[@"payload"][@"type"]
+        RTCSessionDescription* remoteSDP = [[RTCSessionDescription alloc] initWithType:payload[@"type"]
                                                                                    sdp:sdp];
         
         [self.webRTC setRemoteDescription:remoteSDP forPeerWithID:dictionary[@"from"] receiver:YES];
@@ -425,22 +426,23 @@
         
         [self.currentClients removeObject:dictionary[@"id"]];
         
-    } else if ([dictionary[@"payload"][@"name"] isEqualToString:@"audio"]) {
-    
-        TLKMediaStream *stream = [self _streamForPeerIdentifier:dictionary[@"from"]];
-        stream.audioMuted = [dictionary[@"type"] isEqualToString:@"mute"];
-        if([self.delegate respondsToSelector:@selector(socketIOSignaling:peer:toggledAudioMute:)]) {
-            [self.delegate socketIOSignaling:self peer:dictionary[@"from"] toggledAudioMute:stream.audioMuted];
+    }  else if ([dictionary[@"type"] isEqualToString:@"mute"] || [dictionary[@"type"] isEqualToString:@"unmute"]) {
+        if ([payload[@"name"] isEqualToString:@"audio"]) {
+            TLKMediaStream *stream = [self _streamForPeerIdentifier:dictionary[@"from"]];
+            stream.audioMuted = [dictionary[@"type"] isEqualToString:@"mute"];
+            if([self.delegate respondsToSelector:@selector(socketIOSignaling:peer:toggledAudioMute:)]) {
+                [self.delegate socketIOSignaling:self peer:dictionary[@"from"] toggledAudioMute:stream.audioMuted];
+            }
+        } else if ([payload[@"name"] isEqualToString:@"video"]) {
+            TLKMediaStream *stream = [self _streamForPeerIdentifier:dictionary[@"from"]];
+            stream.videoMuted = [dictionary[@"type"] isEqualToString:@"mute"];
+            if([self.delegate respondsToSelector:@selector(socketIOSignaling:peer:toggledVideoMute:)]) {
+                [self.delegate socketIOSignaling:self peer:dictionary[@"from"] toggledVideoMute:stream.videoMuted];
+            }
         }
-    
-    } else if ([dictionary[@"payload"][@"name"] isEqualToString:@"video"]) {
-    
-        TLKMediaStream *stream = [self _streamForPeerIdentifier:dictionary[@"from"]];
-        stream.videoMuted = [dictionary[@"type"] isEqualToString:@"mute"];
-        if([self.delegate respondsToSelector:@selector(socketIOSignaling:peer:toggledVideoMute:)]) {
-            [self.delegate socketIOSignaling:self peer:dictionary[@"from"] toggledVideoMute:stream.videoMuted];
-        }
-    
+    }
+    else if ([eventName isEqualToString:@"message"]) {
+        [_delegate socketIOSignaling: self recievedMessage: dictionary[@"type"] andData: data];
     }
 }
 
