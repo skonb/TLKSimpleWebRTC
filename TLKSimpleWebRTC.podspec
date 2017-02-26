@@ -1,5 +1,4 @@
-Pod::Spec.new do |s|
-  s.name         = "TLKSimpleWebRTC"
+Pod::Spec.new do |s| s.name         = "TLKSimpleWebRTC"
   s.version      = "1.1.0"
   s.summary      = "A iOS interface to a SimpleWebRTC based signalling server using Socket.io"
   s.homepage     = "https://github.com/skonb/TLKSimpleWebRTC"
@@ -11,4 +10,5 @@ Pod::Spec.new do |s|
   s.source_files = "Classes/*.{h,m}"
   s.requires_arc = true
   s.dependency 'Socket.IO-Client-Swift', '~> 8.2.0'
+  s.dependency 'TLKWebRTC', '2.1.0'
 end
