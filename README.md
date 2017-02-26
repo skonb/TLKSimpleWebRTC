@@ -11,16 +11,7 @@ Usage is mostly the same with the original version, you can check [original proj
 
 ## Build Environment
 
-Creating the build environment is a bit different than the original version. 
-
-First download / clone and add files under the `Classes` folder to your project. Repeat this for the [TLKWebRTC](https://github.com/otalk/TLKWebRTC.git). 
-
-Afterwards add following lines to your Podfile;
-
-    use_frameworks!
-
-    pod 'libjingle_peerconnection'
-    pod 'Socket.IO-Client-Swift'
+Just replace dependency with this repository. It includes swift dependency, so make sure to declare 'use_frameworks!', and be careful about minimum deployment target of the Xcode project.
 
 ## Differences from the TLKSimpleWebRTC
 
