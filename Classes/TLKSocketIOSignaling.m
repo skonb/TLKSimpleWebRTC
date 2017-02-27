@@ -190,7 +190,7 @@
     
     __weak TLKSocketIOSignaling *weakSelf = self;
 
-    NSURL* url = [[NSURL alloc] initWithString: [NSString stringWithFormat:@"%@:%d", apiServer, port]];
+    NSURL* url = [[NSURL alloc] initWithString: [NSString stringWithFormat:@"%@://%@:%d", (config[@"secure"].boolValue ? "https" : "http"), apiServer, port]];
     self.socket = [[SocketIOClient alloc] initWithSocketURL:url config: config];
 
     if (!self.webRTC) {
