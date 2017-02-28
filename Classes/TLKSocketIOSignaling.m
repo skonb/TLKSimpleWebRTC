@@ -39,7 +39,7 @@
 #pragma mark - TLKSocketIOSignaling
 
 @interface TLKSocketIOSignaling () <
-    TLKWebRTCDelegate>
+TLKWebRTCDelegate>
 {
     BOOL _localAudioMuted;
     BOOL _localVideoMuted;
@@ -104,12 +104,18 @@
 
 #pragma mark - object lifecycle
 
+- (instancetype)initReceiveOnly{
+    id res = [self initWithVideoDevice:nil];
+    [res setReceiveOnly:YES];
+    return res;
+}
+
 - (instancetype)initWithVideoDevice:(AVCaptureDevice *)device {
-	self = [super init];
+    self = [super init];
     if (self) {
-    	if (device) {
-			_allowVideo = YES;
-			_videoDevice = device;
+        if (device) {
+            _allowVideo = YES;
+            _videoDevice = device;
         }
         self.currentClients = [[NSMutableSet alloc] init];
     }
@@ -117,17 +123,17 @@
 }
 
 - (instancetype)initWithVideo:(BOOL)allowVideo {
-	// Set front camera as the default device
-	AVCaptureDevice* frontCamera;
-	if (allowVideo) {
-		frontCamera = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo] lastObject];
-	}
-	return [self initWithVideoDevice:frontCamera];
+    // Set front camera as the default device
+    AVCaptureDevice* frontCamera;
+    if (allowVideo) {
+        frontCamera = [[AVCaptureDevice devicesWithMediaType:AVMediaTypeVideo] lastObject];
+    }
+    return [self initWithVideoDevice:frontCamera];
 }
 
 - (instancetype)init {
-	// Use default device
-	return [self initWithVideo:YES];
+    // Use default device
+    return [self initWithVideo:YES];
 }
 
 #pragma mark - peer/room utilities
@@ -180,7 +186,7 @@
 }
 
 - (void)connectToServer:(NSString*)apiServer port:(int)port secure:(BOOL)secure success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback {
-    [self connectToServer:apiServer port:port config:@{@"secure": [NSNumber numberWithBool: secure]} success:successCallback failure:failureCallback];
+    [self connectToServer:apiServer port:port config:@{@"secure": [NSNumber numberWithBool: secure], @"log": @(YES)} success:successCallback failure:failureCallback];
 }
 
 - (void)connectToServer:(NSString*)apiServer port:(int)port config:( NSDictionary *) config success:(void(^)(void))successCallback failure:(void(^)(NSString*))failureCallback {
@@ -189,12 +195,14 @@
     }
     
     __weak TLKSocketIOSignaling *weakSelf = self;
-
+    
     NSURL* url = [[NSURL alloc] initWithString: [NSString stringWithFormat:@"%@://%@:%d", ([config[@"secure"] boolValue] ? @"https" : @"http"), apiServer, port]];
     self.socket = [[SocketIOClient alloc] initWithSocketURL:url config: config];
-
+    
     if (!self.webRTC) {
-        if (self.allowVideo && self.videoDevice) {
+        if(self.receiveOnly){
+            self.webRTC = [[TLKWebRTC alloc]initReceiveOnly];
+        }else if (self.allowVideo && self.videoDevice) {
             self.webRTC = [[TLKWebRTC alloc] initWithVideoDevice:self.videoDevice];
         } else {
             self.webRTC = [[TLKWebRTC alloc] initWithVideo:NO];
@@ -225,9 +233,9 @@
     }];
     
     [self.socket on:@"disconnect" callback:^(NSArray* data, SocketAckEmitter* ack) {
-         [weakSelf _socketDisconnected];
+        [weakSelf _socketDisconnected];
     }];
-
+    
     [self.socket onAny:^(SocketAnyEvent* e) {
         if (![e.event isEqualToString:@"connect"] &&
             ![e.event isEqualToString:@"disconnect"] &&
@@ -337,7 +345,7 @@
 
 - (void)_socketEventReceived:(NSString*)eventName withData:(id)data {
     NSDictionary *dictionary = nil;
-
+    
     if ([eventName isEqualToString:@"locked"]) {
         
         self.roomKey = (NSString*)[data objectAtIndex:0];
@@ -364,27 +372,37 @@
         for (NSDictionary *info in serverList) {
             NSString *username = info[@"username"] ? info[@"username"] : @"";
             NSString *password = info[@"credential"] ? info[@"credential"] : @"";
-            RTCICEServer *server = [[RTCICEServer alloc] initWithURI:[NSURL URLWithString:info[@"url"]] username:username password:password];
-            if (server != nil)
-                [self.webRTC addICEServer:server];
+            if(info[@"url"]){
+                NSString *url = info[@"url"];
+                RTCICEServer *server = [[RTCICEServer alloc] initWithURI:[NSURL URLWithString:url] username:username password:password];
+                if (server != nil)
+                    [self.webRTC addICEServer:server];
+            }else{
+                for(NSString *url in info[@"urls"]){
+                    RTCICEServer *server = [[RTCICEServer alloc] initWithURI:[NSURL URLWithString:url] username:username password:password];
+                    if (server != nil)
+                        [self.webRTC addICEServer:server];
+                    
+                }
+            }
         }
     } else {
-    
+        
         dictionary = data[0];
         
         if (![dictionary isKindOfClass:[NSDictionary class]]) {
             dictionary = nil;
         }
     }
-
+    
     NSLog(@"eventName = %@, type = %@, from = %@, to = %@",eventName, dictionary[@"type"], dictionary[@"from"], dictionary[@"to"]);
     
     NSDictionary * payload = dictionary[@"payload"];
     
     if ([dictionary[@"type"] isEqualToString:@"iceFailed"]) {
-    
+        
         [[[UIAlertView alloc] initWithTitle:@"Connection Failed" message:@"Talky could not establish a connection to a participant in this chat. Please try again later." delegate:nil cancelButtonTitle:@"Continue" otherButtonTitles:nil] show];
-    
+        
     } else if ([dictionary[@"type"] isEqualToString:@"candidate"]) {
         
         RTCICECandidate* candidate = [[RTCICECandidate alloc] initWithMid:payload[@"candidate"][@"sdpMid"]
@@ -534,3 +552,4 @@
 }
 
 @end
+
