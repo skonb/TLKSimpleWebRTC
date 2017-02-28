@@ -17,6 +17,7 @@ typedef void (^TLKSocketIOSignalingFailureBlock)(NSError *error);
 
 - (instancetype)initWithVideoDevice:(AVCaptureDevice *)device;
 - (instancetype)initWithVideo:(BOOL)allowVideo;
+- (instancetype)initReceiveOnly;
 
 @property (weak, nonatomic) id <TLKSocketIOSignalingDelegate> delegate;
 
@@ -50,6 +51,8 @@ typedef void (^TLKSocketIOSignalingFailureBlock)(NSError *error);
 @property (readonly, nonatomic) NSString *roomName;
 @property (readonly, nonatomic) NSString *roomKey;
 
+@property (nonatomic, assign) BOOL receiveOnly;
+
 @end
 
 @protocol TLKSocketIOSignalingDelegate <NSObject>
@@ -69,3 +72,4 @@ typedef void (^TLKSocketIOSignalingFailureBlock)(NSError *error);
 - (void)socketIOSignaling:(TLKSocketIOSignaling *)socketIOSignaling recievedMessage:(NSDictionary *)message andData: (id) data;
 
 @end
+
